@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Lane Switch ONLINE+</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;overflow:hidden;font-family:Arial;background:linear-gradient(#b3ffab,#12fff7)}
+canvas{display:block}
+#ui,#stats,#options{
+ position:fixed;left:50%;transform:translateX(-50%);
+ background:#ffffffcc;padding:8px 14px;border-radius:14px;
+ font-weight:bold;backdrop-filter:blur(6px)
+}
+#ui{top:8px}
+#stats{top:52px;font-size:13px}
+#options{top:95px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+button{
+ padding:6px 12px;border:none;border-radius:12px;
+ background:#222;color:#fff;font-weight:bold;font-size:12px
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+Score <span id="score">0</span> |
+Mode <span id="mode">NORMAL</span>
+</div>
+
+<div id="stats"></div>
+
+<div id="options">
+<button onclick="setMode('NORMAL')">Normal</button>
+<button onclick="setMode('HARD')">Hard</button>
+<button onclick="setMode('SUPER')">Super</button>
+<button onclick="setMode('MONSTER')">Monster</button>
+<button onclick="startReplay()">🎥 Replay</button>
+<button onclick="shareGhost()">🌐 Share</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const c=document.getElementById("game"),x=c.getContext("2d");
+c.width=innerWidth;c.height=innerHeight;
+
+const lanes=[c.width/2-80,c.width/2+80];
+let lane=0,score=0,speed=4,spawn=0;
+let obs=[],gameOver=false,mode="NORMAL";
+let revives=3,ghostData=[],ghostPlay=[],replay=false;
+
+function rankKey(){return "rank_"+mode}
+function ghostKey(){return "ghost_"+mode}
+
+function setMode(m){
+ mode=m;
+ document.getElementById("mode").innerText=m;
+ loadGhost();
+ init();
+}
+
+function init(){
+ score=0;obs=[];spawn=0;lane=0;
+ speed=4;gameOver=false;replay=false;
+ ghostData=[];
+ revives=mode==="MONSTER"?5:3;
+}
+
+function spawnObs(){
+ obs.push({
+  lane:Math.random()>0.5?0:1,
+  y:-120,
+  h:60+Math.random()*100
+ });
+}
+
+function update(){
+ if(gameOver && !replay)return;
+
+ spawn++;
+ if(spawn>Math.max(25,90-speed*3)){
+  spawnObs();spawn=0;
+ }
+
+ obs.forEach(o=>o.y+=speed);
+ obs=obs.filter(o=>o.y<c.height+100);
+
+ obs.forEach(o=>{
+  if(o.lane===lane && o.y+o.h>c.height-120 && o.y<c.height-80){
+   if(revives>0){revives--;obs=[]}
+   else end();
+  }
+ });
+
+ if(!replay)ghostData.push(lane);
+
+ score++;
+ if(mode==="HARD")speed+=0.01;
+ if(mode==="SUPER")speed+=0.015;
+ if(mode==="MONSTER")speed+=0.02;
+
+ document.getElementById("score").innerText=score;
+ document.getElementById("stats").innerText=
+  `BEST ${mode}: ${localStorage.getItem(rankKey())||0} | Revive:${revives}`;
+}
+
+function draw(){
+ x.clearRect(0,0,c.width,c.height);
+
+ lanes.forEach(l=>{
+  x.fillStyle="#fff6";
+  x.fillRect(l-30,0,60,c.height);
+ });
+
+ /* player */
+ x.fillStyle="#ff5252";
+ x.beginPath();
+ x.arc(lanes[lane],c.height-100,22,0,Math.PI*2);
+ x.fill();
+
+ /* ghost */
+ if(ghostPlay.length){
+  x.fillStyle="#00f4";
+  x.beginPath();
+  x.arc(lanes[ghostPlay[Math.min(score,ghostPlay.length-1)]],
+        c.height-100,18,0,Math.PI*2);
+  x.fill();
+ }
+
+ obs.forEach(o=>{
+  x.fillStyle="#333";
+  x.fillRect(lanes[o.lane]-22,o.y,44,o.h);
+ });
+}
+
+function end(){
+ gameOver=true;
+ let best=localStorage.getItem(rankKey())||0;
+ if(score>best){
+  localStorage.setItem(rankKey(),score);
+  localStorage.setItem(ghostKey(),JSON.stringify(ghostData));
+ }
+}
+
+function loadGhost(){
+ let url=new URL(location.href);
+ if(url.searchParams.get("ghost")){
+  ghostPlay=JSON.parse(atob(url.searchParams.get("ghost")));
+ }else{
+  let g=localStorage.getItem(ghostKey());
+  ghostPlay=g?JSON.parse(g):[];
+ }
+}
+
+function startReplay(){
+ replay=true;
+ score=0;
+}
+
+function shareGhost(){
+ let g=localStorage.getItem(ghostKey());
+ if(!g)return alert("Chưa có Ghost");
+ let link=location.href.split("?")[0]+"?ghost="+btoa(g);
+ prompt("Copy link Ghost:",link);
+}
+
+c.onclick=()=>{if(!gameOver)lane=lane?0:1};
+
+loadGhost();
+init();
+(function loop(){update();draw();requestAnimationFrame(loop)})();
+</script>
+</body>
+</html>
